@@ -17,6 +17,19 @@
   source ./mui.sh;  ## First time only
   __mui_start -v__var < <(ls -1 /); echo "${__var}";
   ```
+* display example 
+  ```
+  # ls -1 / | ./mui.sh -r7
+  === Select Menu ==================
+      bin
+      boot
+  =>  dev
+      etc
+      home
+      lib
+      lib64
+  ===   3/ 21 (*  0) Quit,?:help ===
+  ```
 
 ## Usage :
 ```
