@@ -136,28 +136,39 @@ function __mui_start(){
              END{ printf "\r%s%s",ind,footer; }';
   }
   
-  ## hashbar ( arg[1]:length )
-  function __mui_hbar(){ echo -n "${__m_hbar:0:${1}}"; }
+  ## fill text
+  ##   ( args[1]:text, [2]:offset(0:center, -x:right), [3]:length )
+  function __mui_fill_hbar(){
+    local __r=0 __l=0 __txtlen=$(__mui_wlen "${1}");
+    case "${2:-3}" in
+      [1-9]*  ) (( __l=${2:-3}                          ));;
+      0       ) (( __l=(${3:-__length}-2-__txtlen)/2    ));;
+      -[1-9]* ) (( __l=${3:-__length}-2-__txtlen-${2:1} ));;
+    esac;
+    (( __r=${3:-__length}-__txtlen-2-__l
+     , ( ${3:-__length} < (__txtlen+2) ) && ( __l=0,__r=0 ) ));
+    echo -n "${__m_hbar:0:${__l}} ${1} ${__m_hbar:0:${__r}}";
+  }
   
   ## create title/footer
   function __mui_fill_title_footer(){
     ## calc length
     ### __ldigit+1 : internal line number(and separator) for sort/join,
     ### +4 : arrow(2chars) + select mark(2chars) , +1 : right margin
+    ### +2+6 : margin(2chars) + hashbar(3*2chars)
     (( __length = $(__mui_wlen "${__list}")-(__ldigit+1)+4+1 \
-     , __length < $(__mui_wlen "${__footer}") \
-         && ( __length = $(__mui_wlen "${__footer}") ) \
-     , __length < $(__mui_wlen "${__title}") \
-         && ( __length = $(__mui_wlen "${__title}") ) ));
+                  +( __selcld == 1 ? 0 : -2 )
+     , __length < $(__mui_wlen "${__footer}")+2+6 \
+         && ( __length = $(__mui_wlen "${__footer}")+2+6 ) \
+     , __length < $(__mui_wlen "${__title}")+2+6 \
+         && ( __length = $(__mui_wlen "${__title}")+2+6 ) ));
     
     ## title coloring and padding with hbar
-    __title="$( echo -n "${__title}$(__mui_hbar \
-      $((__length-$(__mui_wlen "${__title}"))) )" \
+    __title="$( __mui_fill_hbar "${__title}"\
         | sed -r "s/(\S.*)$/\x1b[1;34m\1\x1b[0m\x1b[K/;" )";
     
     ## footer coloring and padding with hbar
-    __footer="$( echo -n "${__footer}$( __mui_hbar \
-       $((__length-$(__mui_wlen "${__footer}"))) )" \
+    __footer="$( __mui_fill_hbar "${__footer}"\
         | sed -r -e "s/([A-Z]+)/\x1b[4m\1\x1b[0m\x1b[1;34m/g;" \
                  -e "s/(\S.*)$/\x1b[1;34m\1\x1b[0m\x1b[K\r/;" )";
   }
@@ -181,9 +192,9 @@ function __mui_start(){
     (( __max < __prows && ( __rows = __max ) ));
     
     ## set help title/footer
-    __title="$(__mui_hbar 3) ${__MUI_M_MENU_HELP_TITLE} ";
-    __footer="$(__mui_hbar 3\
-      ) ${__limit//9/1}/${__limit//9/2} ${__MUI_M_MENU_HELP_USAGE} ";
+    __title="${__MUI_M_MENU_HELP_TITLE}";
+    __footer="${__limit//9/1}/${__limit//9/2} $(: \
+              )${__MUI_M_MENU_HELP_USAGE}";
     __mui_fill_title_footer;
     
     ## help text coloring
@@ -235,7 +246,7 @@ function __mui_start(){
     [[ "${__ldigit}" =~ ^[1-9][0-9]*$ ]] || return 10;
   (( __limit = 10**__ldigit-1, __multi = __limit ));
   
-  ### for title/footer ( titile/hashbar )
+  ### for title/footer ( title/hashbar )
   __title="${__MUI_M_MENU_TITLE}";
   __m_hbar="$(printf "%.0s${__MUI_M_HASH:-=}" {1..500})";
   
@@ -262,7 +273,7 @@ function __mui_start(){
       -p   ) __mui_opt_set __vartp   "${2}"              && shift;;
       -p?* ) __mui_opt_set __vartp   "${1:2}"                    ;;
       
-      ## max number of multiple selections / single selection
+      ## max number of multiple selections
       -m   ) __mui_opt_set __multi   "${2}"   ${__limit} && shift;;
       -m?* ) __mui_opt_set __multi   "${1:2}"                    ;;
       -s   ) __mui_opt_set __multi   1                           ;;
@@ -294,14 +305,13 @@ function __mui_start(){
   [[ "${__rows}"     =~ ^[1-9][0-9]*$ ]]               || return 16;
   (( __rows > __max && ( __rows = __max ) ));
   
-  ## set title/footer text
-  __title="$(__mui_hbar 3) ${__title} $(__mui_hbar 3)";
-  __footer="$(__mui_hbar 3) $(\
-      [ ${__max} -eq ${__rows} ] \
-        || echo -n "${__limit//9/1}/${__limit//9/2} ";
-      [ ${__multi} -eq 1 ]       || echo -n '(*'${__limit//9/3}') ';
-    )${__MUI_M_MENU_USAGE} $(__mui_hbar 3)";
-  __mui_fill_title_footer; 
+  ## set footer text
+  __footer="$( [ ${__max} -eq ${__rows} ] \
+                 || echo -n "${__limit//9/1}/${__limit//9/2} ";
+               [ ${__multi} -eq 1 ] \
+                 || echo -n '(*'${__limit//9/3}') ';
+             )${__MUI_M_MENU_USAGE}";
+  __mui_fill_title_footer;
   
   ## init UI
   tput civis; # hide cursor
@@ -366,7 +376,7 @@ function __mui_start(){
       ## quit, help
       "q" | "Q" | "${__MUI_K_ESC}" \
         | "${__MUI_K_BS}" | "${__MUI_K_DEL}" ) __select=""; break;;
-      "?" ) __mui_show_help;;
+      "?" | "${__MUI_K_F1}" ) __mui_show_help;;
     esac;
     
     ## for single selection (__numsel == 1)
@@ -422,18 +432,17 @@ function __mui_readkey(){
       [ "${__buf}" = "" ] || [ "${__buf}" = $'\x1b' ] && break;
       
       __out="${__out}${__buf}";
-      ## unknown
+      ## unknown ( not ESC + '[' )
       [ "${__out:0:2}" = $'\x1b\x5b' ] || break;
-      
-      ## Ins,Home,End,PgUP,PgDown
-      [ ${#__out} -eq 4 ] && [ "${__buf}" = $'\x7e' ] && break;
       
       ## len=5 (max) F1-F12
       [ ${#__out} -ge 5 ] && break;
       
-      ## others
+      ## detect '~' for len=4 (Ins,Home,End,PgUP,PgDown)
+      [ "${__buf}" = $'\x7e' ] && break;
+      
+      ## for len=3 (Up,Down,Right,Left)
       case "${__out}" in
-        ## Up,Down,Right,Left
         $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
         $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
       esac;
