@@ -63,7 +63,7 @@ function __mui_start(){
         __top=1         __pos=1         __min=1         __max=1     \
         __rows=1        __length=1      __ind=0         __multi=999 \
         __title=""      __footer=""     __selcld=1      __m_hbar="" \
-        __in=""         __lastin=""     __numsel=0      __nextpos=0 \
+        __in=""         __lastin=""     __numsel=0                  \
         __limit=999     __ldigit=3;
   
   # functions
@@ -204,20 +204,11 @@ function __mui_start(){
     ## display help (and user key input)
     while __mui_display;
           __mui_readkey __in; do
-      case "${__in}" in
-        ## line/page move
-        "${__MUI_K_UP}"    | "k" )  (( __pos-- ));;
-        "${__MUI_K_DOWN}"  | "j" )  (( __pos++ ));;
-        "${__MUI_K_LEFT}"  | "h" | "${__MUI_K_PGUP}" )
-                (( __pos -= __rows , __top -= __rows ));;
-        "${__MUI_K_RIGHT}" | "l" | "${__MUI_K_PGDOWN}" )
-                (( __pos += __rows , __top += __rows ));;
-        "${__MUI_K_HOME}" )  __pos=${__min};;
-        "${__MUI_K_END}"  )  __pos=${__max};;
-        ## exit help
-        "" | "q" | "Q" | "${__MUI_K_ESC}" \
-          | "${__MUI_K_BS}" | "${__MUI_K_DEL}" )  break;;
-      esac;
+      
+      ## line/page move, Home/End, Quit
+      __mui_display_key_move         || break;
+      __mui_display_key_move_esc     || break;
+      
     done;
     return 0;
   }
@@ -239,9 +230,84 @@ function __mui_start(){
            return 0; };
   }
   
+  ## line/page move, Home/End, Quit
+  __mui_display_key_move(){
+    case "${__in}" in
+      ## line/page move
+      "k" )  (( __pos-- ));;
+      "j" )  (( __pos++ ));;
+      "h" )  (( __pos -= __rows , __top -= __rows ));;
+      "l" )  (( __pos += __rows , __top += __rows ));;
+      ## quit
+      "q" | "Q" )  __select=""; return 1;;
+    esac;
+    return 0;
+  }
+  __mui_display_key_move_esc(){
+    case "${__in}" in
+      ## line/page move
+      "${__MUI_K_UP}"   )  (( __pos-- ));;
+      "${__MUI_K_DOWN}" )  (( __pos++ ));;
+      "${__MUI_K_LEFT}"  | "${__MUI_K_PGUP}"   )
+              (( __pos -= __rows , __top -= __rows ));;
+      "${__MUI_K_RIGHT}" | "${__MUI_K_PGDOWN}" )
+              (( __pos += __rows , __top += __rows ));;
+      ## Home/End
+      "${__MUI_K_HOME}" )  __pos=${__min};;
+      "${__MUI_K_END}"  )  __pos=${__max};;
+      ## quit
+      "${__MUI_K_ESC}"  )  __select=""; return 1;;
+    esac;
+    return 0;
+  }
+  
+  ## move and select, select all/none/invert (__multi > 1)
+  __mui_display_key_select_multi(){
+    [ ${__multi} -gt 1 ] || return 0;
+    case "${__in}" in
+      ## move and select
+      "K" ) [ ${__pos} -le ${__min} ] && return 0;
+            [ "${__lastin}" != "${__in}" ] && __mui_upd_selected;
+            (( __pos-- ));
+            __mui_upd_selected;;
+      "J" ) [ ${__pos} -ge ${__max} ] && return 0;
+            [ "${__lastin}" != "${__in}" ] && __mui_upd_selected;
+            (( __pos++ ));
+            __mui_upd_selected;;
+      ## select all/none/invert
+      "a" ) [ ${__max} -le ${__multi} ] && __select="${__list}";;
+      "r" ) __select="";;
+      "i" ) [ $(( __max-$(__mui_lncnt "${__select}") )) -le ${__multi} ]\
+              && __select="$(echo "${__list}"$'\n'"${__select}" \
+                             | grep -vE "^\s*$" | sort | uniq -u )";;
+    esac;
+    return 0;
+  }
+  
+  ## jump to menu number (__numsel == 1)
+  __mui_display_key_select_num(){
+    [ ${__numsel} -eq 1 ] || return 0;
+    local __nextpos=0;
+    case "${__in}" in
+      [0-9] )
+        __nextpos="$(echo "${__list}"$'\n'"${__list}" \
+          | tail -n +$((__pos+1)) \
+          | sed -rn "/^[0-9]{${__ldigit}}:\s*${__in}/=" | head -1)";
+        [ -n "${__nextpos}" ] && ((__pos=(__pos+__nextpos-1)%__max+1));
+        if [ $(echo "${__list}" \
+                 | grep -cE "^[0-9]{${__ldigit}}:\s*${__in}") -eq 1 ] \
+           && [ ${__multi} -eq 1 ]; then
+          __mui_display;
+          __select="$(__mui_pos_val)";
+          return 1;
+        fi;;
+    esac;
+    return 0;
+  }
+  
   # processing
   ## set default
-  ### for stdin read limit ( ldgit/limit -> multi )
+  ### for stdin read limit ( ldigit/limit -> multi )
   __ldigit="${__MUI_D_LDIGIT:-3}";
     [[ "${__ldigit}" =~ ^[1-9][0-9]*$ ]] || return 10;
   (( __limit = 10**__ldigit-1, __multi = __limit ));
@@ -321,65 +387,26 @@ function __mui_start(){
   while [ -n "${__in}" ] && __mui_display;
         __lastin="${__in}";
         __mui_readkey __in; do
+    
+    ## line/page move, Home/End, Quit
+    __mui_display_key_move         || break;
+    __mui_display_key_move_esc     || break;
+    ## move and select, all/none/invert (__multi > 1)
+    __mui_display_key_select_multi || break;
+    ## jump to menu number (__numsel == 1)
+    __mui_display_key_select_num   || break;
+    
     case "${__in}" in
-      ## line/page move
-      "${__MUI_K_UP}"    | "k" )  (( __pos-- ));;
-      "${__MUI_K_DOWN}"  | "j" )  (( __pos++ ));;
-      "${__MUI_K_LEFT}"  | "h" | "${__MUI_K_PGUP}" )
-              (( __pos -= __rows , __top -= __rows ));;
-      "${__MUI_K_RIGHT}" | "l" | "${__MUI_K_PGDOWN}" )
-              (( __pos += __rows , __top += __rows ));;
-      ## Home/End
-      "${__MUI_K_HOME}" )  __pos=${__min};;
-      "${__MUI_K_END}"  )  __pos=${__max};;
-      
-      ## move and select
-      "K" ) [ ${__pos} -le ${__min} ] && continue;
-            [ "${__lastin}" != "${__in}" ] && [ ${__multi} -gt 1 ] \
-              && __mui_upd_selected;
-            (( __pos-- ));
-            [ ${__multi} -gt 1 ] && __mui_upd_selected;;
-      "J" ) [ ${__pos} -ge ${__max} ] && continue;
-            [ "${__lastin}" != "${__in}" ] && [ ${__multi} -gt 1 ] \
-              && __mui_upd_selected;
-            (( __pos++ ));
-            [ ${__multi} -gt 1 ] && __mui_upd_selected;;
-      
-      ## jump to menu number (__numsel == 1)
-      [0-9] ) [ ${__numsel} -eq 1 ] || continue;
-        __nextpos="$(echo "${__list}"$'\n'"${__list}" \
-          | tail -n +$((__pos+1)) \
-          | sed -rn "/^[0-9]{${__ldigit}}:\s*${__in}/=" | head -1)";
-        [ -n "${__nextpos}" ] && ((__pos=(__pos+__nextpos-1)%__max+1));
-        if [ $(echo "${__list}" \
-                 | grep -cE "^[0-9]{${__ldigit}}:\s*${__in}") -eq 1 ] \
-           && [ ${__multi} -eq 1 ]; then
-          __mui_display;
-          __select="$(echo "${__list}" | sed -n "${__pos}p")";
-          break;
-        fi;;
-      
-      ## select all/none/invert (__multi > 1)
-      "a" ) [ ${__multi} -gt 1 ] && [ ${__max} -le ${__multi} ] \
-              && __select="${__list}";;
-      "r" ) [ ${__multi} -gt 1 ] && __select="";;
-      "i" ) [ ${__multi} -gt 1 ] \
-              && [ $(( __max - $(__mui_lncnt "${__select}") )) \
-                     -le ${__multi} ] \
-              && __select="$(echo "${__list}"$'\n'"${__select}" \
-                              | grep -vE "^\s*$" | sort | uniq -u )";;
-      
       ## select, enter
       " " ) __mui_upd_selected;;
       ""  ) [ ${__multi} -eq 1 ] && __select="$(__mui_pos_val)"; break;;
       
-      ## quit, help
-      "q" | "Q" | "${__MUI_K_ESC}" \
-        | "${__MUI_K_BS}" | "${__MUI_K_DEL}" ) __select=""; break;;
+      ## quit(add), help
+      "${__MUI_K_BS}" | "${__MUI_K_DEL}" ) __select=""; break;;
       "?" | "${__MUI_K_F1}" ) __mui_show_help;;
     esac;
     
-    ## for single selection (__numsel == 1)
+    ## for single selection (__multi == 1)
     [ ${__multi} -eq 1 ] && [ $(__mui_lncnt "${__select}") -eq 1 ] \
       && break;
     
