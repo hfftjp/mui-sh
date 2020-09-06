@@ -2,54 +2,51 @@
 "mui.sh" - select "M"enu "UI" script for bash.
 
 ## Example of use :
-* call by bash
-  ``` shell
-  ls -1 / | ./mui.sh | grep -En '';  
-  ```
-  ``` shell
-  __var="$(ls -1 / | ./mui.sh)"; echo "${__var}";  
-  ```
 * call by source
   ``` shell
-  source ./mui.sh -v "__var" < <(ls -1 /); echo "${__var}";  
+  ls -1 / | source ./mui.sh -r 7 | paste -sd,  
   ```
   ``` shell
   source ./mui.sh;  ## First time only
   __mui_start -v__var < <(ls -1 /); echo "${__var}";
   ```
+  ``` shell
+  source ./mui.sh;  ## First time only
+  echo "$(ls -1 / | __mui_start -r 5 -i 3)";
+  ```
 * display example 
   ```
-  # ls -1 / | ./mui.sh -r7
-  === Select Menu ==================
+  # ls -1 / | source ./mui.sh -r 7 | paste -sd,
+  == menu ========
       bin
       boot
-  =>  dev
-      etc
-      home
-      lib
+      dev
+    * etc
+    * home
+  =>* lib
       lib64
-  ===   3/ 21 (*  0) Quit,?:help ===
+  ==  6/21(* 3) ==
   ```
 
 ## Usage :
 ```
-Usage : __mui_start -v "var_name" [optional arguments]
-   or : ./mui.sh    [optional arguments]
+Usage : __mui_start [optional arguments]
 
-Standard input (*required) : item list(with LF)
+ Standard input (*required) : item list(with LF)
 
-Arguments :
-  required* :
-    -v <var_name> : variables name to return selected values
-  optional  :
-    -p <var_name> : variables name to read/write \
-                     the cursor position on UI at start/exit
-    -m <number>   : max number of multiple selections
-    -s            : enable single selection (="-m 1")
-    -t <text>     : change UI title text
-    -i <number>   : set indent(bytes) of UI display
-    -r <number>   : max number of rows of UI body part
-    -n            : enable forward match / select by 'number key'
+ Standard output (optional) : return selected list(with LF)
+
+ Arguments :
+   optional  :
+     -v <var_name> : variables name to return selected values
+     -p <var_name> : variables name to read/write \
+                      the cursor position on UI at start/exit
+     -m <number>   : max number of multiple selections
+     -s            : enable single selection (="-m 1")
+     -t <text>     : change UI title text
+     -i <number>   : set indent(bytes) of UI display
+     -r <number>   : max number of rows of UI body part
+     -n            : enable forward match / select by 'number key'
 ```
 ---
 ## Requirement :
