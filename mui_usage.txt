@@ -1,0 +1,32 @@
+mui.sh - select "M"enu "UI" script for bash
+
+Example of use :
+    [1] ls -1 / | . ./mui.sh | paste -sd,
+    [2] . ./mui.sh; __mui_start -v__var < <(ls -1 /); echo "${__var}";
+    [3] . ./mui.sh; echo "$(ls -1 / | __mui_start -r 5 -i 3)";
+
+Usage : __mui_start [optional arguments]
+ Standard input (*required) : item list(with LF)
+ Standard output (optional) : return selected list(with LF)
+ Arguments :
+   optional  :
+     -v <var_name> : variables name to return selected values
+     -p <var_name> : variables name to read/write \
+                      the cursor position on UI at start/exit
+     -m <number>   : max number of multiple selections
+     -s            : enable single selection (="-m 1")
+     -t <text>     : change UI title text
+     -i <number>   : set indent(bytes) of UI display
+     -r <number>   : max number of rows of UI body part
+     -n            : enable forward match / select by 'number key'
+
+Requirement :
+  bash-4.2          bash,read
+  coreutils-8.22    [,cat,echo,head,join,printf,sort,tail,uniq
+  gawk-4.0          awk
+  grep-2.20         grep
+  ncurses-5.9       tput
+  sed-4.2           sed
+  util-linux-2.23   column
+
+Author : hfftjp
