@@ -192,7 +192,11 @@ function __mui_main(){
 }
 
 ## cleanup IF / functions
-function __mui_end(){ tput cnorm; stty -F /dev/tty sane; }
+function __mui_end(){
+  tput cnorm; stty -F /dev/tty echo;
+  [ ${BASH_VERSINFO[0]:-3} -le 3 ] \
+    && stty -F /dev/tty icanon time 0 min 1;
+}
 function __mui_unload(){
   __mui_end; unset $(set | grep -Eo "^__mui_[^= ]+"| paste -s);
 }
@@ -259,36 +263,43 @@ function __mui_display(){
 }
 
 ## key input to __mrkin/__lmrkin
+if [ ${BASH_VERSINFO[0]:-3} -le 3 ]; then
 function __mui_readkey(){
   local __mrkbuf; __lmrkin="${__mrkin}";
   IFS= read -rsn1 -d $'\x00' __mrkin </dev/tty || return 1; # get 1byte
   case "${__mrkin}" in [$'\x20'-$'\x7e'] ) return 0;; esac; # 1byte
-  
   if [ "${__mrkin}" = $'\x1b' ]; then # for [ESC](0x1b) + xxx
-    if [ ${BASH_VERSINFO[0]:-3} -le 3 ]; then
-      while __mrkbuf=$(head -c1 </dev/tty); [ -n "${__mrkbuf}" ]; do
-        __mrkin="${__mrkin}${__mrkbuf}";
-        case "${__mrkin}" in
-          $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
-          $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
-        esac;
-      done;
-    else
-      while IFS= read -rsn1 -t 0.01 -d $'\x00' __mrkbuf </dev/tty; do
-        [ -z "${__mrkbuf}" ] || [ "${__mrkbuf}" = $'\x1b' ] && break;
-        __mrkin="${__mrkin}${__mrkbuf}";
-        [ "${__mrkin:0:2}" = $'\x1b\x5b' ] || break; # not ESC + '['
-        [ ${#__mrkin} -ge 5 ] && break; # len=5 (max) F1-F12
-        [ "${__mrkbuf}" = $'\x7e' ] && break; # detect '~' for len=4
-        case "${__mrkin}" in
-          $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
-          $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
-        esac;
-      done;
-    fi;
+    while __mrkbuf=$(head -c1 </dev/tty); [ -n "${__mrkbuf}" ]; do
+      __mrkin="${__mrkin}${__mrkbuf}";
+      case "${__mrkin}" in
+        $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
+        $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
+      esac;
+    done;
   fi;
   return 0;
 }
+else
+function __mui_readkey(){
+  local __mrkbuf; __lmrkin="${__mrkin}";
+  IFS= read -rsn1 -d $'\x00' __mrkin </dev/tty || return 1; # get 1byte
+  case "${__mrkin}" in [$'\x20'-$'\x7e'] ) return 0;; esac; # 1byte
+  if [ "${__mrkin}" = $'\x1b' ]; then # for [ESC](0x1b) + xxx
+    while IFS= read -rsn1 -t 0.01 -d $'\x00' __mrkbuf </dev/tty; do
+      [ -z "${__mrkbuf}" ] || [ "${__mrkbuf}" = $'\x1b' ] && break;
+      __mrkin="${__mrkin}${__mrkbuf}";
+      [ "${__mrkin:0:2}" = $'\x1b\x5b' ] || break; # not ESC + '['
+      [ ${#__mrkin} -ge 5 ] && break; # len=5 (max) F1-F12
+      [ "${__mrkbuf}" = $'\x7e' ] && break; # detect '~' for len=4
+      case "${__mrkin}" in
+        $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
+        $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
+      esac;
+    done;
+  fi;
+  return 0;
+}
+fi;
 
 ## line count ( arg[1]:text lines )
 function __mui_lncnt(){ echo -n "${1}" | awk 'END{print NR}'; }
