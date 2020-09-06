@@ -1,11 +1,11 @@
 mui.sh - select "M"enu "UI" script for bash
 
-Example of use :
+## Example of use :
     [1] ls -1 / | . ./mui.sh | paste -sd,
     [2] . ./mui.sh; __mui_start -v__var < <(ls -1 /); echo "${__var}";
     [3] . ./mui.sh; echo "$(ls -1 / | __mui_start -r 5 -i 3)";
 
-Ctrl+C trap example for sub-shell :
+## Ctrl+C trap example for sub-shell :
   # in your script finalize function
   function __xx_final(){
     local __exitcd=$?;
@@ -18,12 +18,12 @@ Ctrl+C trap example for sub-shell :
   [ "$BASH_SOURCE" = "${0}" ] && trap '__xx_final' 1 2 3 15;
   __mui_start ... # call __mui_start
 
-UnSource example :
+## UnSource example :
   source ./mui.sh;
   __mui_start ... # call __mui_start
   __mui_unload; # unload mui functions and constants
 
-Usage : __mui_start [optional arguments]
+## Usage : __mui_start [optional arguments]
  Standard input (*required) : item list(with LF)
  Standard output (optional) : return selected list(with LF)
  Arguments :
@@ -38,7 +38,7 @@ Usage : __mui_start [optional arguments]
      -r <number>   : max number of rows of UI body part
      -n            : enable forward match / select by 'number key'
 
-Requirement :
+## Requirement :
   bash-4.2          bash,read
   coreutils-8.22    [,cat,echo,head,join,printf,sort,tail,uniq
   gawk-4.0          awk
@@ -47,4 +47,4 @@ Requirement :
   sed-4.2           sed
   util-linux-2.23   column
 
-Author : hfftjp
+## Author : hfftjp
