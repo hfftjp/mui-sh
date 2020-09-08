@@ -5,20 +5,19 @@
 #  Usage :
 #   [1] ls -1 / | . ./mui.sh | paste -sd,
 #   [2] . ./mui.sh; __mui_start -v__var < <(ls -1 /); echo "${__var}";
-#   [3] . ./mui.sh; echo "$(ls -1 / | __mui_start -r 5 -i 3)";
 #########################################################################
 ## start UI
 function __mui_start(){
   [ -t 0 ] && return 11; ## no list
   
   # local variables; get parent variables' name;
-  local __mui_varname __mui_selval __mui_vartp __mui_toppos __mui_exitcd;
-  __mui_varname="$(
+  local __mui_varsl __mui_selval __mui_vartp __mui_toppos __mui_exitcd;
+  __mui_varsl="$(
     echo "${@}" | sed -rn "s/^(|.*\s)\-v\s*(\S+)(\s.*|)$/\2/p")";
   __mui_vartp="$(
     echo "${@}" | sed -rn "s/^(|.*\s)\-p\s*(\S+)(\s.*|)$/\2/p")";
-  [[ "${__mui_varname:-x}" =~ ^[_a-zA-Z][-_0-9a-zA-Z]*$ ]] || return 12;
-  [[ "${__mui_vartp:-x}"   =~ ^[_a-zA-Z][-_0-9a-zA-Z]*$ ]] || return 13;
+  [[ "${__mui_varsl:-x}" =~ ^[_a-zA-Z][-_0-9a-zA-Z]*$ ]] || return 12;
+  [[ "${__mui_vartp:-x}" =~ ^[_a-zA-Z][-_0-9a-zA-Z]*$ ]] || return 13;
   __mui_toppos="${!__mui_vartp}";
   
   # initialize UI ( save stdout; hide cursor; input feedback off; )
@@ -35,8 +34,8 @@ function __mui_start(){
   
   ## return cursor position / selected values
   [ -n "${__mui_vartp}" ] && eval "${__mui_vartp}=\"${__mui_toppos}\"";
-  [ -z "${__mui_varname}" ] && echo "${__mui_selval}" || \
-    eval "${__mui_varname}=\"$( \
+  [ -z "${__mui_varsl}" ] && echo "${__mui_selval}" || \
+    eval "${__mui_varsl}=\"$( \
     echo -n "${__mui_selval}" | sed -r -e 's/(["`$\])/\\\1/g'; )\""; #'
   
   return 0;
@@ -45,29 +44,30 @@ function __mui_start(){
 ## main
 function __mui_main(){
   # local variables
-  local -r \
-    __M_MENU_TITLE='menu' __M_HBAR="$(printf '%.0s=' {1..500})"  \
-    __K_ESC=$'\x1b' __K_BS=$'\x08' __K_DEL=$'\x7f'               \
-    __K_LF=$'\x0a'  __K_SP=$'\x20'                               \
-    __K_UP=$'\x1b\x5b\x41'         __K_DOWN=$'\x1b\x5b\x42'      \
-    __K_RIGHT=$'\x1b\x5b\x43'      __K_LEFT=$'\x1b\x5b\x44'      \
-    __K_HOME=$'\x1b\x5b\x31\x7e'   __K_END=$'\x1b\x5b\x34\x7e'   \
-    __K_PGUP=$'\x1b\x5b\x35\x7e'   __K_PGDOWN=$'\x1b\x5b\x36\x7e'\
-    __K_CTL_A=$'\x01' __K_CTL_R=$'\x12' __K_CTL_V=$'\x16'        \
+  local -r __C_H="\x1b[1;34m"; __C_0="\x1b[0m" __C_S="\x1b[47m"\
+    __M_MENU_TITLE='menu' __M_HBAR="$(printf '%.0s=' {1..500})"\
+    __K_ESC=$'\x1b' __K_BS=$'\x08' __K_DEL=$'\x7f'             \
+    __K_LF=$'\x0a'  __K_SP=$'\x20'                             \
+    __K_UP=$'\x1b\x5b\x41'       __K_DOWN=$'\x1b\x5b\x42'      \
+    __K_RIGHT=$'\x1b\x5b\x43'    __K_LEFT=$'\x1b\x5b\x44'      \
+    __K_HOME=$'\x1b\x5b\x31\x7e' __K_END=$'\x1b\x5b\x34\x7e'   \
+    __K_PGUP=$'\x1b\x5b\x35\x7e' __K_PGDOWN=$'\x1b\x5b\x36\x7e'\
+    __K_CTL_A=$'\x01' __K_CTL_R=$'\x12' __K_CTL_V=$'\x16'      \
     2>/dev/null;
-  local __list  __limit=99 __ldgt=2 __select __multi=99 __numsel=0    \
-    __top=1 __pos=1 __min=1 __max=1 __rows=1 __mrkin __lmrkin __buf   \
-    __ind __inds __len=1 __hlen=2 __title="${__M_MENU_TITLE}" __footer;
+  local __list __lim=99 __ldgt=2 __select __multi=99 __numsel=0        \
+    __top=1 __pos=1 __min=1 __max __rows __mrkin __lmrkin __buf __wid=1\
+    __ind __inds __len=1 __hlen=2 __title="${__M_MENU_TITLE}" __footer \
+    __drow=$(($(tput lines)-2)) __dlen=$(($(tput cols)-1)) __indl;
   
-  ### for body ( rows/top/pos )
-  __rows=$(($(tput lines)-2));  ## 2 = title(1row) + footer(1row)
+  ### for body ( top/pos )
   [[ "${__mui_toppos}" =~ ^[1-9][0-9]*:[1-9][0-9]*$ ]] \
     && { __top="${__mui_toppos%:*}"; __pos="${__mui_toppos#*:}"; };
   
   ## read / check stdin
-  __list="$(cat - | grep -vE "^\s*$" | head -${__limit} \
+  __list="$(cat - | grep -vE "^\s*$" | head -${__lim} \
               | awk '{printf "%0'"${__ldgt}"'d:%s\n",NR,$0}')";
   __max=$(__mui_lncnt "${__list}"); [ ${__max} -ge 1 ] || return 11;
+  __rows=${__max};
   
   ## read args.
   while [ -n "${1}" ]; do
@@ -78,6 +78,7 @@ function __mui_main(){
       -r* ) __mui_opt __rows   "${@}" && shift;;
       -i* ) __mui_opt __ind    "${@}" && shift;;
       -n  ) __mui_opt __numsel "${1}" 1       ;;
+      -w* ) __mui_opt __wid    "${@}" && shift;;
     esac;
     shift;
   done;
@@ -86,38 +87,42 @@ function __mui_main(){
   [[ "${__multi}" =~ ^[1-9][0-9]{0,$((__ldgt-1))}$ ]] || return 14;
   [[ "${__ind}"   =~ ^[0-9]*$ ]]                      || return 15;
   [[ "${__rows}"  =~ ^[1-9][0-9]*$ ]]                 || return 16;
-  [ -z "${__ind}" ] && __inds="\x1b[K\r" || \
+  [[ "${__wid}"   =~ ^[1-9][0-9]*$ ]]                 || return 17;
+  __indl=${__ind:-0}; [ -z "${__ind}" ] && __inds="\x1b[K\r" || \
   { [ ${__ind} -eq 0 ] && __ind="\r" || __ind="\r\x1b[${__ind}C";
     __inds="\r"; };
-  (( __multi>__limit && ( __multi=__limit )
-    ,__rows>__max    && ( __rows=__max ) ));
+  (( __multi>__lim && ( __multi=__lim )
+    ,__rows>__drow && ( __rows=__drow )
+    ,__rows>__max  && ( __rows=__max ) ));
   
   ## set title/footer text
   [ ${#__title} -ne 0 ] && __title=" ${__title} ";
-  __footer=" $( 
-    [ ${__max} -eq ${__rows} ] \
-      || echo -n "${__limit//9/1}/${__limit//9/2}";
-    [ ${__multi} -eq 1 ] || echo -n '(*'${__limit//9/3}')'; ) ";
+  __footer=" $(
+    [ ${__max} -eq ${__rows} ] || echo -n "${__lim//9/a}/${__lim//9/b}";
+    [ ${__multi} -eq 1 ] || echo -n '(*'${__lim//9/c}')'; ) ";
   
   ## calc length
   ## __ldgt+1 : internal line number(and separator) for sort/join,
   ## +4 : arrow(2chars) + select mark(2chars) , +1 : right margin
-  (( __len = $(__mui_wlen "${__list}")-(__ldgt+1)+4+1 \
+  (( __len = $(__mui_wlen "${__list}")-(__ldgt+1)+4+1
    , __len < $(__mui_wlen "${__footer}")+__hlen*2 \
-       && ( __len = $(__mui_wlen "${__footer}")+__hlen*2 ) \
+       && ( __len = $(__mui_wlen "${__footer}")+__hlen*2 )
    , __len < $(__mui_wlen "${__title}")+__hlen*2 \
-       && ( __len = $(__mui_wlen "${__title}")+__hlen*2 ) ));
+       && ( __len = $(__mui_wlen "${__title}")+__hlen*2 )
+   , __wid>=6 && (__len=__wid)
+   , __len>(__dlen-__indl) && (__len=__dlen-__indl) ));
   
-  __title="$( __mui_fill_hbar "${__title}"\
-      | sed -r "s/(\S.*)$/\x1b[1;34m\1\x1b[0m/;" )";
-  __footer="$( __mui_fill_hbar "${__footer}"\
-      | sed -r "s/(\S.*)$/\x1b[1;34m\1\x1b[0m/;" )";
+  __title="$( __mui_fill_hbar "${__title}" 0 )";
+  [ ${__len} -lt 16 ] && __footer="$( __mui_fill_hbar "$(
+    [ ${__max} -eq ${__rows} ] || echo -n 'd-e';
+    [ ${__multi} -eq 1 ] || echo -n '*'${__lim//9/c}; )" 1 0 )" \
+    || __footer="$( __mui_fill_hbar "${__footer}" 1 )";
   
   ## user input loop / update display UI
   __mui_display 1; # Initial display UI
   while [ -n "${__mrkin}" ] && __mui_display; __mui_readkey; do
     
-    ## line/page move, Home/End, Quit
+    ## move / select / quit
     case "${__mrkin}" in
       "k" | "${__K_UP}"   ) (( __pos-- ));;
       "j" | "${__K_DOWN}" ) (( __pos++ ));;
@@ -125,8 +130,8 @@ function __mui_main(){
           (( __pos-=__rows ,__top-=__rows ));;
       "l" | "${__K_RIGHT}" | "${__K_PGDOWN}" )
           (( __pos+=__rows ,__top+=__rows ));;
-      "${__K_HOME}" )  __pos=${__min};;
-      "${__K_END}"  )  __pos=${__max};;
+      "${__K_HOME}" ) __pos=${__min};;
+      "${__K_END}"  ) __pos=${__max};;
       "${__K_SP}" ) __mui_upd_selected;;
       "${__K_LF}" ) [ ${__multi} -eq 1 ] && __select="$(__mui_pos_val)";
                     break;;
@@ -203,8 +208,10 @@ function __mui_unload(){
 
 ## title/footer coloring and padding with hbar
 function __mui_fill_hbar(){
-  local __r=0 __l=__hlen __tlen=$(__mui_wlen "${1}");
-  (( __r=__len-__tlen-__l ,__len<__tlen && ( __l=0 ,__r=0 ) ));
+  local __r __l __h=${3:-${__hlen}} __tlen=$(__mui_wlen "${1}");
+  (( ${2:-0} == 0 ? ( __l=__h ,__r=__len-__tlen-__l ) \
+                  : ( __r=__h ,__l=__len-__tlen-__r ) 
+    ,__len < __tlen && ( __l=0 ,__r=0 ) ));
   echo -n "${__M_HBAR:0:${__l}}${1}${__M_HBAR:0:${__r}}";
 }
 
@@ -215,7 +222,7 @@ function __mui_opt(){
   [ "${3:0:1}" = "-" ] && eval "${1}=''" && return 1;
   eval "${1}=\"${3}\"" && return 0;
 }
-#########################################################################
+
 ## get value on cursor position
 function __mui_pos_val(){
   (( __pos>__max && ( __pos=__max ) ,__pos<__min && ( __pos=__min ) ));
@@ -242,50 +249,42 @@ function __mui_display(){
    , __top<__min && ( __top=__min ) ,__top>__pos && ( __top=__pos )
    , __top<(__pos-__rows+1) && ( __top=__pos-__rows+1 ) ));
   
-  # title, body and footer
+  # title & footer
+  local __tmpt="${__ind}${__C_H}${__title:0:${__len}}${__C_0}${__inds}"\
+        __tmpf="${__footer}";
+  if [ ${__len} -lt 16 ]; then
+    [ ${__max} -gt $(( __top-1+__rows )) ] && __tmpf="${__tmpf//e/>}";
+    [ ${__min} -lt ${__top} ] && __tmpf="${__tmpf//d/<}";
+    __tmpf="${__tmpf//[de]/-}";
+  else
+    __tmpf="$(echo -n "${__tmpf}" | sed -r \
+      "s|a+/b+|$(printf "%${__ldgt}d/%${__ldgt}d" ${__pos} ${__max})|")";
+  fi;
+  __tmpf="$(echo -n "${__tmpf}" | sed -r \
+    "s|c+|$(printf "%${__ldgt}d" $(__mui_lncnt "${__select}"))|")";
+  __tmpf="${__ind}${__C_H}${__tmpf:0:${__len}}${__C_0}${__inds}";
+  
+  # display
   join -t $'\v' -a 1 -1 1 -2 2 -o 2.1 1.1 -e ' ' \
     <(echo "${__list}" | sed -n "${__top},$((__top+__rows-1))p") \
     <(echo "${__select}" | sed -r "s/^/*\v/") \
     | sed -rn "s/^(.)\v[0-9]{${__ldgt}}:(.*)$/\1 \2/p" \
-    | sed -r -e 's/^/  /g' -e "s/$/${__M_HBAR//?/ }/" \
-    | pr -t -W${__len} | sed -r \
-      "$((__pos-__top+1))s/^  (..)(.*)$/=>\1\x1b[47m\2\x1b[0m/" \
-    | awk -v "upd=${1:-0}" -v "rows=$((__rows+1))" -v "ind=${__ind}" \
-      -v inds="${__inds}" -v "title=${__ind}${__title}${__inds}" \
-      -v "footer=$( echo -n "${__footer}" | sed -r \
-      -e "s|1+/2+|$(
-          printf "%${__ldgt}d/%${__ldgt}d" ${__pos} ${__max} )|" \
-      -e "s|3+\)|$(
-          printf "%${__ldgt}d)" $(__mui_lncnt "${__select}") )|")" \
+    | sed -r -e 's/^/  /g' -e "s/$/${__M_HBAR//?/ }/" | pr -t -W${__len}\
+    | sed -r "$((__pos-__top+1))s/^  (..)(.*)$/=>\1${__C_S}\2${__C_0}/" \
+    | awk -v upd=${1:-0} -v rows=$((__rows+1)) -v ind="${__ind}" \
+      -v inds="${__inds}" -v title="${__tmpt}" -v footer="${__tmpf}" \
       'BEGIN{ if(upd==0) printf "\x1b["rows"A\r"; print title; };
        { printf "%s%s%s\n",ind,gensub(/\t/," ","g",$0),inds; };
-       END{ printf "\r%s%s%s",ind,footer,inds; };';
+       END{ printf "\r%s",footer; };';
 }
 
 ## key input to __mrkin/__lmrkin
-if [ ${BASH_VERSINFO[0]:-3} -le 3 ]; then
 function __mui_readkey(){
   local __mrkbuf; __lmrkin="${__mrkin}";
   IFS= read -rsn1 -d $'\x00' __mrkin </dev/tty || return 1; # get 1byte
   case "${__mrkin}" in [$'\x20'-$'\x7e'] ) return 0;; esac; # 1byte
   if [ "${__mrkin}" = $'\x1b' ]; then # for [ESC](0x1b) + xxx
-    while __mrkbuf=$(head -c1 </dev/tty); [ -n "${__mrkbuf}" ]; do
-      __mrkin="${__mrkin}${__mrkbuf}";
-      case "${__mrkin}" in
-        $'\x1b\x5b\x41' | $'\x1b\x5b\x42' | \
-        $'\x1b\x5b\x43' | $'\x1b\x5b\x44' ) break;;
-      esac;
-    done;
-  fi;
-  return 0;
-}
-else
-function __mui_readkey(){
-  local __mrkbuf; __lmrkin="${__mrkin}";
-  IFS= read -rsn1 -d $'\x00' __mrkin </dev/tty || return 1; # get 1byte
-  case "${__mrkin}" in [$'\x20'-$'\x7e'] ) return 0;; esac; # 1byte
-  if [ "${__mrkin}" = $'\x1b' ]; then # for [ESC](0x1b) + xxx
-    while IFS= read -rsn1 -t 0.01 -d $'\x00' __mrkbuf </dev/tty; do
+    while __mui_getkey; do
       [ -z "${__mrkbuf}" ] || [ "${__mrkbuf}" = $'\x1b' ] && break;
       __mrkin="${__mrkin}${__mrkbuf}";
       [ "${__mrkin:0:2}" = $'\x1b\x5b' ] || break; # not ESC + '['
@@ -299,12 +298,20 @@ function __mui_readkey(){
   fi;
   return 0;
 }
+if [ ${BASH_VERSINFO[0]:-3} -le 3 ]; then
+function __mui_getkey(){
+  __mrkbuf=$(head -c1 </dev/tty); [ -n "${__mrkbuf}" ];
+}
+else
+function __mui_getkey(){
+  IFS= read -rsn1 -t 0.01 -d $'\x00' __mrkbuf </dev/tty;
+}
 fi;
 
-## line count ( arg[1]:text lines )
+## line count
 function __mui_lncnt(){ echo -n "${1}" | awk 'END{print NR}'; }
 
-## get max line length ( arg[1]:text line[s] )
+## get max line length
 function __mui_wlen(){
   echo $(($(echo -n "$(echo $'\n'"${1}" | sed -r \
     -e 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g;s/\t/ /g;'\
