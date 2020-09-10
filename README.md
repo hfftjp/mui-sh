@@ -44,9 +44,12 @@ Usage : __mui_start [optional arguments]
      -m <number>   : max number of multiple selections
      -s            : enable single selection (="-m 1")
      -t <text>     : change UI title text
-     -i <number>   : set indent(bytes) of UI display
+     -i <number>   : set indent(bytes) of UI display, \
+                      and "ESC [ K" cmd is disabled
      -r <number>   : max number of rows of UI body part
      -n            : enable forward match / select by 'number key'
+     -w <number>   : set width(bytes) of UI, if possible
+     -A            : hide cursor mark "=>"
 ```
 ---
 ## Requirement :
