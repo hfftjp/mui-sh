@@ -2,9 +2,6 @@
 #########################################################################
 # lmui.sh - select "M"enu "UI" script for bash ( lite )
 #  Author : hfftjp
-#  Usage :
-#   [1] ls -1 / | . lmui.sh | paste -sd,
-#   [2] . lmui.sh; __mui_start -v__var < <(ls -1 /); echo "${__var}";
 #########################################################################
 ## start UI
 function __mui_start(){
@@ -22,6 +19,9 @@ function __mui_start(){
   exec 3>&1- 1>/dev/tty; tput civis; stty -F /dev/tty -echo;
   [ ${BASH_VERSINFO[0]:-3} -le 3 ] \
     && stty -F /dev/tty -icanon time 0 min 0;
+  
+  # UI debuglog
+  [ "${__DEBUG:-0}" -ne 0 ] && exec 1> >(tee -a debug.log);
   
   # call main
   __mui_main "${@}" < <(echo "${__mui_inlist}"); __mui_exitcd=$?;
@@ -54,20 +54,17 @@ function __mui_main(){
   # local variables
   local -r __M_SP="$(printf '%.0s ' {1..300})" __M_AR='>' __M_SL='*' \
     __C_0="\x1b[0m" __C_S="\x1b[47m" __C_B="\x1b[1;34m" \
-    __K_ESC=$'\x1b' __K_BS=$'\x08' __K_DEL=$'\x7f' \
-    __K_LF=$'\x0a' __K_SP=$'\x20' \
-    __K_CTL_A=$'\x01' __K_CTL_R=$'\x12' \
-    __K_CTL_V=$'\x16' __K_CTL_N=$'\x0e' \
-    __K_UP=$'\x1b\x5b\x41'       __K_DOWN=$'\x1b\x5b\x42'       \
-    __K_RIGHT=$'\x1b\x5b\x43'    __K_LEFT=$'\x1b\x5b\x44'       \
-    __K_HOME=$'\x1b\x5b\x31\x7e' __K_END=$'\x1b\x5b\x34\x7e'    \
-    __K_PGUP=$'\x1b\x5b\x35\x7e' __K_PGDOWN=$'\x1b\x5b\x36\x7e' \
+    __K_ESC=$'\x1b' __K_UP=$'\x1b\x5b\x41' __K_DOWN=$'\x1b\x5b\x42' \
+    __DKEYSET="ku,k,w;kd,j,s;kh,1b5b317e;ke,1b5b347e;ks,20;kl,0a;kq,q,Q;
+    ka,01;kn,12,0e;kv,16;k1,K,W;k2,J,S;k3,1b5b357e;k4,1b5b367e;" \
     2>/dev/null;
-  local __list __lim=99 __ldgt=2 __select __multi=99 __numsel=0 \
+  local __list __lim=99 __ldgt=4 __select __multi=99 __numsel=0 \
     __top=1 __pos=1 __min=1 __max __rows __mrkin __lmrkin __buf \
     __ind="" __indl __inds="" __len=1 __wid=0 __wid_min         \
-    __drow=$(($(tput lines)-2)) __dlen=$(($(tput cols)-1))      \
-    __ar="${__M_AR}" __ars __arl __scl=1;
+    __drow=$(tput lines) __dlen=$(($(tput cols)-1))             \
+    __ar="${__M_AR}" __ars __arl __scl=1 __once=0 __callback="" \
+    __keyset="" __ku=() __kd=() __kh=() __ke=() __ks=() __kl=() __kq=()\
+    __ka=() __kn=() __kv=() __k1=() __k2=() __k3=() __k4=() __k5=();
   
   ### for body ( top/pos )
   [[ "${__mui_toppos}" =~ ^[1-9][0-9]*:[1-9][0-9]*$ ]] \
@@ -93,6 +90,9 @@ function __mui_main(){
   __mui_opts w __wid    int  "${@}" || return 17;
   __mui_opts A __ar     =    "${@}";
   __mui_opts S __scl    =0   "${@}";
+  __mui_opts o __once   =1   "${@}";
+  __mui_opts C __callback name "${@}" || return 19;
+  __mui_opts K __keyset -    "${@}";
   [ $(__mui_lncnt "${__select}") -le ${__multi} ] || return 18;
   __indl=${__ind:-0}; [ -z "${__ind}" ] && __inds="\x1b[0K" || \
   { [ ${__ind} -eq 0 ] && __ind="" || __ind="\x1b[${__ind}G"; };
@@ -102,6 +102,9 @@ function __mui_main(){
     ,__rows>__max  && ( __rows=__max )
     ,__max==__rows && ( __scl=0 )
     ,__wid_min = (__multi>1?1:0)+__arl+1+__scl ));
+  __mui_keybind "${__DKEYSET}";
+  [ -n "${__keyset}" ] && __mui_keybind "${__keyset}";
+  
   ## calc length
   (( __len = $(__mui_wlen "${__list}")-(__ldgt+1)+(__multi>1?1:0)+__arl
    , __wid>=__wid_min && (__len=__wid-__scl)
@@ -110,43 +113,43 @@ function __mui_main(){
   
   ## user input loop / update display UI
   __mui_display 1; # Initial display UI
+  [ ${__once} -eq 0 ] && \
   while [ -n "${__mrkin}" ] && __mui_display; __mui_readkey; do
-    
     ## move / select / quit
     case "${__mrkin}" in
-      [kw] | "${__K_UP}"   ) (( __pos-- ));;
-      [js] | "${__K_DOWN}" ) (( __pos++ ));;
-      [ha] | "${__K_LEFT}"  | "${__K_PGUP}"   )
-        (( __pos-=__rows ,__top-=__rows ));;
-      [ld] | "${__K_RIGHT}" | "${__K_PGDOWN}" )
-        (( __pos+=__rows ,__top+=__rows ));;
-      "${__K_HOME}" ) __pos=${__min};;
-      "${__K_END}"  ) __pos=${__max};;
-      "${__K_SP}" ) __mui_upd_selected;;
-      "${__K_LF}" ) [ ${__multi} -eq 1 ] && __select="$(__mui_pos_val)";
-        break;;
-      [qQ] | "${__K_ESC}" | "${__K_BS}" | "${__K_DEL}" )
-        __select=""; break;;
+      "${__K_UP}"  | "${__ku[0]}" | "${__ku[1]}" ) (( __pos-- ));;
+      "${__K_DOWN}"| "${__kd[0]}" | "${__kd[1]}" ) (( __pos++ ));;
+      "${__k3[0]}" | "${__k3[1]}" ) (( __pos-=__rows ,__top-=__rows ));;
+      "${__k4[0]}" | "${__k4[1]}" ) (( __pos+=__rows ,__top+=__rows ));;
+      "${__kh[0]}" | "${__kh[1]}" ) __pos=${__min};;
+      "${__ke[0]}" | "${__ke[1]}" ) __pos=${__max};;
+      "${__ks[0]}" | "${__ks[1]}" ) __mui_upd_selected;;
+      "${__k5[0]}" | "${__k5[1]}" ) __mui_upd_selected; (( __pos++ ));;
+      "${__kl[0]}" | "${__kl[1]}" ) 
+        [ ${__multi} -eq 1 ] && __select="$(__mui_pos_val)"; break;;
+      "${__K_ESC}" | "${__kq[0]}" | "${__kq[1]}" ) __select=""; break;;
     esac;
     
     ## move and select, all/none/invert (__multi > 1)
     [ ${__multi} -gt 1 ] && \
     case "${__mrkin}" in
-      [KW] ) if ! [ ${__pos} -le ${__min} ]; then
-               [ "${__lmrkin}" != "${__mrkin}" ] && __mui_upd_selected;
-               (( __pos-- )); __mui_upd_selected;
-             fi;;
-      [JS] ) if ! [ ${__pos} -ge ${__max} ]; then
-               [ "${__lmrkin}" != "${__mrkin}" ] && __mui_upd_selected;
-               (( __pos++ )); __mui_upd_selected;
-             fi;;
-      "${__K_CTL_A}" )
+      "${__k1[0]}" | "${__k1[1]}" ) 
+        if ! [ ${__pos} -le ${__min} ]; then
+          [ "${__lmrkin}" != "${__mrkin}" ] && __mui_upd_selected;
+          (( __pos-- )); __mui_upd_selected;
+        fi;;
+      "${__k2[0]}" | "${__k2[1]}" ) 
+        if ! [ ${__pos} -ge ${__max} ]; then
+          [ "${__lmrkin}" != "${__mrkin}" ] && __mui_upd_selected;
+          (( __pos++ )); __mui_upd_selected;
+        fi;;
+      "${__ka[0]}" | "${__ka[1]}" ) 
         [ ${__max} -le ${__multi} ] && __select="${__list}";;
-      "${__K_CTL_R}" | "${__K_CTL_N}" ) __select="";;
-      "${__K_CTL_V}" )
-        [ $(( __max-$(__mui_lncnt "${__select}") )) -le ${__multi} ]\
-          && __select="$(echo "${__list}"$'\n'"${__select}" \
-                         | grep -vE "^\s*$" | sort | uniq -u )";;
+      "${__kn[0]}" | "${__kn[1]}" ) __select="";;
+      "${__kv[0]}" | "${__kv[1]}" ) 
+        [ $(( __max-$(__mui_lncnt "${__select}") )) -le ${__multi} ] \
+          && __select="$(echo "${__list}"$'\n'"${__select}"\
+             | grep -vE "^\s*$" | sort | uniq -u )";;
     esac;
     
     ## jump to menu number (__numsel == 1)
@@ -171,7 +174,7 @@ function __mui_main(){
     
   done;
   
-  echo ""; # print "\n" instead of traped by __mui_readkey
+  echo "";
   
   ## return cursor position
   __mui_toppos="${__top}:${__pos}";
@@ -196,6 +199,14 @@ function __mui_opts(){
     "int"  ) eval "[[ \"\${${2}}\" =~ ^[0-9]*$ ]]";;
     *      ) return 0;;
   esac;
+}
+
+## keycodes bind to actions
+function __mui_keybind(){
+ eval "$(echo -n "${1}" | sed -r 's/\s+//g;s/;/\n/g' | awk -F, '
+   function keyesc(kcd){
+     return sprintf("$\x27%s\x27",gensub("(..)","\\\\x\\1","g",kcd)); };
+   NF>=2{ printf("__%s=( %s %s );\n",$1,keyesc($2),keyesc($3)); }' )";
 }
 
 ## get value on cursor position
@@ -224,8 +235,22 @@ function __mui_display(){
     | awk -v upd=${1:-0} -v rows=$((__rows-1)) \
       'BEGIN{ if(upd==0 && rows>0) printf "\x1b["rows"F"; };
        NR==1{ printf("%s",$0); }; NR>1{ printf("\n%s",$0); };';
+  
+  # display hook function call
+  local __mui_disp_cpos;
+  read -sdR -p $'\e[6n' __mui_disp_cpos </dev/tty;
+  local -r __mui_disp_cpos;
+  __mui_display_hook;
+  echo -en "\x1b[${__mui_disp_cpos#*[}H";
 }
+
 function __mui_display_function_update(){
+# callback function bind to "__mui_display_hook"
+if set | grep -qE "^${__callback}\s+\(\)\s*$"; then
+  eval "function __mui_display_hook(){ ${__callback}; }";
+else
+  eval "function __mui_display_hook(){ :; }";
+fi;
 # __mui_display_gen_body
 if [ ${__multi} -eq 1 ]; then
   function __mui_display_gen_body(){
@@ -252,8 +277,8 @@ else
         s/^(.*)(.{${__scl}})$/${__ind}\1${__C_B}\2${__C_0}${__inds}/;" ;
   };
 fi;
-
 }
+
 function __mui_display_scroll_bar(){
    [ ${__scl} -eq 0 ] && cat - || \
    cat - | awk -v min=${__min} -v max=${__max} \
